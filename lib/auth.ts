@@ -16,7 +16,6 @@ export const authOptions: NextAuthOptions = {
           prompt: "consent",
           access_type: "offline",
           response_type: "code",
-          // Add include_granted_scopes to help with testing mode
           include_granted_scopes: "true",
           scope: [
             "openid",
@@ -39,15 +38,54 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async signIn({ account, user, profile, email, credentials }) {
-      // Handle potential access_denied error
-      if (!account || !user) {
-        console.error("Sign in failed - missing account or user data");
-        return false;
+    async jwt({ token, user }) {
+      // On first JWT callback after sign in, persist id/role
+      if (user) {
+        token.id = (user as any).id;
+        token.role = (user as any).role;
       }
-      
-      // Capture refresh_token when user connects Google
-      if (account?.provider === "google" && account.refresh_token) {
+
+      // If token lacks role/id, hydrate from DB using subject
+      if (!token.role || !token.id) {
+        const userId = (token.id as string) ?? (token.sub as string) ?? null;
+        if (userId) {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, role: true },
+          });
+          if (dbUser) {
+            token.id = dbUser.id;
+            token.role = dbUser.role;
+          }
+        }
+      }
+
+      return token;
+    },
+
+    async session({ session, token }) {
+      if (session.user) {
+        (session.user as any).id = (token.id as string) ?? (token.sub as string);
+        (session.user as any).role = token.role as any;
+      }
+      return session;
+    },
+
+    async signIn({ user, account, profile, email, credentials }) {
+      // Only handle redirect for Google OAuth sign-ins
+      if (account?.provider === "google") {
+        const baseUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL || "";
+        const role = (user as any)?.role === "SELLER" ? "SELLER" : "BUYER";
+        const destination = role === "SELLER" ? "/dashboard/seller" : "/dashboard/buyer";
+        return `${baseUrl}${destination}`;
+      }
+      return true;
+    },
+  },
+  events: {
+    // 🔑 Safe place to persist OAuthCredential
+    async linkAccount({ user, account }) {
+      if (account.provider === "google" && account.refresh_token) {
         await prisma.oAuthCredential.upsert({
           where: { userId: user.id },
           create: {
@@ -55,38 +93,33 @@ export const authOptions: NextAuthOptions = {
             provider: "google",
             refreshTokenEnc: encrypt(account.refresh_token),
             accessToken: account.access_token ?? null,
-            accessTokenExp: account.expires_at ? new Date(account.expires_at * 1000) : null,
+            accessTokenExp: account.expires_at
+              ? new Date(account.expires_at * 1000)
+              : null,
             scope: account.scope ?? null,
             tokenType: account.token_type ?? null,
           },
           update: {
             refreshTokenEnc: encrypt(account.refresh_token),
             accessToken: account.access_token ?? null,
-            accessTokenExp: account.expires_at ? new Date(account.expires_at * 1000) : null,
+            accessTokenExp: account.expires_at
+              ? new Date(account.expires_at * 1000)
+              : null,
             scope: account.scope ?? null,
             tokenType: account.token_type ?? null,
           },
         });
       }
-      return true;
-    },
-    async session({ session, user }) {
-      if (session.user) {
-        // ✅ thanks to type augmentation, role is recognized
-        session.user.id = user.id;
-        session.user.role = user.role as "BUYER" | "SELLER";
-      }
-      return session;
     },
   },
   session: { strategy: "jwt" },
-  pages: { 
+  pages: {
     signIn: "/signin",
-    error: "/signin"
+    error: "/signin",
   },
 };
 
-// Helper to get session server-side
+// ✅ Helper to use on server-side
 export async function auth() {
   return await getServerSession(authOptions);
 }

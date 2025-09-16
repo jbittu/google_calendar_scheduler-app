@@ -1,15 +1,26 @@
 "use client";
 
 import useSWR from "swr";
+import { useSession, signIn } from "next-auth/react";
+import { useEffect } from "react";
 import AppointmentCard from "@/components/AppointmentCard";
 
 async function fetcher(url: string) {
   const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to load appointments");
   return res.json();
 }
 
 export default function BuyerDashboard() {
-  const { data } = useSWR("/api/me/appointments", fetcher);
+  const { status } = useSession();
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      signIn("google", { callbackUrl: "/dashboard/buyer" });
+    }
+  }, [status]);
+
+  const { data } = useSWR(status === "authenticated" ? "/api/me/appointments" : null, fetcher);
 
   return (
     <div>
