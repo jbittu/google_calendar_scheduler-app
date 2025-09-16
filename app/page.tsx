@@ -44,8 +44,8 @@ export default function LandingPage() {
       </div>
 
       <p className="text-sm text-gray-600">
-        Or browse{" "}
-        <Link href="/(public)/sellers" className="text-indigo-600 underline">
+        Or browse {""}
+        <Link href="/public/sellers" className="text-indigo-600 underline">
           Sellers
         </Link>{" "}
         without signing in

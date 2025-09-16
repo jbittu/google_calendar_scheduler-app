@@ -71,11 +71,15 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
 
-    async signIn({ user, account, profile, email, credentials }) {
-      // Only handle redirect for Google OAuth sign-ins
+    async signIn({ user, account }) {
       if (account?.provider === "google") {
         const baseUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL || "";
-        const role = (user as any)?.role === "SELLER" ? "SELLER" : "BUYER";
+        // Always read role from DB to reflect any updates (e.g., became SELLER)
+        const dbUser = await prisma.user.findUnique({
+          where: { id: (user as any).id },
+          select: { role: true },
+        });
+        const role = dbUser?.role ?? (user as any)?.role ?? "BUYER";
         const destination = role === "SELLER" ? "/dashboard/seller" : "/dashboard/buyer";
         return `${baseUrl}${destination}`;
       }
