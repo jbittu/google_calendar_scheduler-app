@@ -16,6 +16,8 @@ export const authOptions: NextAuthOptions = {
           prompt: "consent",
           access_type: "offline",
           response_type: "code",
+          // Add include_granted_scopes to help with testing mode
+          include_granted_scopes: "true",
           scope: [
             "openid",
             "email",
@@ -37,7 +39,13 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async signIn({ account, user }) {
+    async signIn({ account, user, profile, email, credentials }) {
+      // Handle potential access_denied error
+      if (!account || !user) {
+        console.error("Sign in failed - missing account or user data");
+        return false;
+      }
+      
       // Capture refresh_token when user connects Google
       if (account?.provider === "google" && account.refresh_token) {
         await prisma.oAuthCredential.upsert({
@@ -72,7 +80,10 @@ export const authOptions: NextAuthOptions = {
     },
   },
   session: { strategy: "jwt" },
-  pages: { signIn: "/signin" },
+  pages: { 
+    signIn: "/signin",
+    error: "/signin"
+  },
 };
 
 // Helper to get session server-side

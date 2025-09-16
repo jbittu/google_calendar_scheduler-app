@@ -1,7 +1,6 @@
 import "./globals.css";
 import { ReactNode } from "react";
-import Navbar from "@/components/Navbar";
-import { SessionProvider } from "next-auth/react";
+import ClientComponentsWrapper from "../components/ClientComponentsWrapper";
 
 export const metadata = {
   title: "Scheduler App",
@@ -11,11 +10,11 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-gray-50 text-gray-900">
-        <SessionProvider>
-          <Navbar />
+      <body className="min-h-screen bg-gray-100 text-gray-900">
+        {/* Client-only components go here */}
+        <ClientComponentsWrapper>
           <main className="container mx-auto px-4 py-6">{children}</main>
-        </SessionProvider>
+        </ClientComponentsWrapper>
       </body>
     </html>
   );
